@@ -1,32 +1,28 @@
-import sys, os
+import os
 import torch
 import argparse
-import timeit
 import numpy as np
 import scipy.misc as misc
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
 import cv2 
 from torch.utils import data
-from tqdm import tqdm
+from collections import OrderedDict
 
-from ptsemseg.models import get_model
-from ptsemseg.loader import get_loader, get_data_path
+from fcn import fcn8s
 from ptsemseg.utils import convert_state_dict
 
-try:
-    import pydensecrf.densecrf as dcrf
-except:
-    print(
-        "Failed to import pydensecrf,\
-           CRF post-processing will not work"
-    )
 
-import math
+def convert_state_dict(state_dict):
+    """Converts a state dict saved from a dataParallel module to normal 
+       module state_dict inplace
+    """
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        name = k[7:]  # remove `module.`
+        new_state_dict[name] = v
+    return new_state_dict
 
-def sigmoid(x):
-  return 1 / (1 + np.exp(-x))
 
 
 def test(args):
@@ -47,15 +43,9 @@ def test(args):
     else:
         img = misc.imresize(imag, (584,880))
 	    
-    data_loader = get_loader('drive')
-    data_path = '../DRIVE'
-    loader = data_loader(data_path, is_transform=True, img_norm=args.img_norm)
     n_classes = 7 
-    resized_img = img.astype(np.uint8)
 
-    orig_size = img.shape[:-1]
-
-    img = img[:, :, ::-1]
+    img = img[:, :, ::-1] # RGB -> BGR
     img = img.astype(float) / 255.0
 
     # NHWC -> NCHW
@@ -64,7 +54,7 @@ def test(args):
 
     img = torch.from_numpy(img).float()
     # Setup Model
-    model = get_model(model_name, n_classes, version=args.dataset)
+    model = fcn8s(n_classes)
     state = convert_state_dict(torch.load(args.model_path)["model_state"])
     model.load_state_dict(state)
     model.eval()
@@ -72,34 +62,23 @@ def test(args):
 
     images = img.to(device)
     outputs = model(images)
-    print(np.unique(outputs.data.cpu().numpy()))
 
-    
-    prob = outputs.data.cpu().numpy()[0,1,:,:]
-    print(np.unique(prob*255))
-    misc.imsave(args.out_path[:-4] + "_prob.png",(prob*255).astype(np.uint8))
+    maps = ['vessel','od','ma','he','ex','se']
 
-    prob = outputs.data.cpu().numpy()[0,6,:,:]
-    print(np.unique(prob*255))
-    misc.imsave(args.out_path[:-4] + "_prob5.png",(prob*255).astype(np.uint8))
+    if not os.path.exists(args.out_folder):
+        os.makedirs(args.out_folder)
+    i=0
+    for item in maps:
+        i=i+1
+        prob = outputs.data.cpu().numpy()[0,i,:,:]
+        if args.dataset=='drive':
+            misc.imsave(args.out_folder + "/result_" + item + '.png',(prob[:,:565]*255).astype(np.uint8))
+        else:
+            misc.imsave(args.out_folder + "/result_" + item + '.png',(prob*255).astype(np.uint8))
 
-    prob = outputs.data.cpu().numpy()[0,2,:,:]
-    print(np.unique(prob*255))
-    misc.imsave(args.out_path[:-4] + "_prob1.png",(prob*255).astype(np.uint8))
 
-    prob = outputs.data.cpu().numpy()[0,3,:,:]
-    print(np.unique(prob*255))
-    misc.imsave(args.out_path[:-4] + "_prob2.png",(prob*255).astype(np.uint8))
 
-    prob = outputs.data.cpu().numpy()[0,4,:,:]
-    print(np.unique(prob*255))
-    misc.imsave(args.out_path[:-4] + "_prob3.png",(prob*255).astype(np.uint8))
-
-    prob = outputs.data.cpu().numpy()[0,5,:,:]
-    print(np.unique(prob*255))
-    misc.imsave(args.out_path[:-4] + "_prob4.png",(prob*255).astype(np.uint8))
-
-    print("Segmentation Mask Saved at: {}".format(args.out_path))
+    print("Segmentation Masks Saved at: {}".format(args.out_folder))
 
 
 
@@ -123,11 +102,11 @@ if __name__ == "__main__":
         "--img_path", nargs="?", type=str, default=None, help="Path of the input image"
     )
     parser.add_argument(
-        "--out_path",
+        "--out_folder",
         nargs="?",
         type=str,
         default=None,
-        help="Path of the output segmap",
+        help="Folder for the output segmap",
     )
     args = parser.parse_args()
     test(args)
