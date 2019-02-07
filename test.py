@@ -10,8 +10,6 @@ from torch.utils import data
 from collections import OrderedDict
 
 from fcn import fcn8s
-from ptsemseg.utils import convert_state_dict
-
 
 def convert_state_dict(state_dict):
     """Converts a state dict saved from a dataParallel module to normal 
@@ -63,6 +61,7 @@ def test(args):
     images = img.to(device)
     outputs = model(images)
 
+    # Save results
     maps = ['vessel','od','ma','he','ex','se']
 
     if not os.path.exists(args.out_folder):
