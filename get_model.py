@@ -30,6 +30,6 @@ def save_response_content(response, destination):
                 f.write(chunk)
 
 if __name__ == "__main__":
-    file_id = '0B1fGSuBXAh1IeEpzajRISkNHckU'
-    destination = './'
+    file_id = '196zCbuHXhzws5B0_xAQ5VMdZmOKZ58Qc'
+    destination = './model.pkl'
     download_model(file_id, destination)
