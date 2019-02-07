@@ -39,7 +39,6 @@ def test(args):
     # Setup image
     print("Read Input Image from : {}".format(args.img_path))
     imag = misc.imread(args.img_path)
-    #img = misc.imresize(imag, (584,880))
     if args.dataset=='drive':
         img = np.zeros((584,880,3))
         img[:,:565,:]=imag
@@ -51,45 +50,19 @@ def test(args):
     data_loader = get_loader('drive')
     data_path = '../DRIVE'
     loader = data_loader(data_path, is_transform=True, img_norm=args.img_norm)
-    n_classes = 7 #loader.n_classes
-
-    resized_img = img.astype(np.uint8) #misc.imresize(
-     #   img, (loader.img_size[0], loader.img_size[1]), interp="bicubic"
-    #)
+    n_classes = 7 
+    resized_img = img.astype(np.uint8)
 
     orig_size = img.shape[:-1]
-    if model_name in ["pspnet", "icnet", "icnetBN"]:
-        # uint8 with RGB mode, resize width and height which are odd numbers
-        img = misc.imresize(img, (orig_size[0] // 2 * 2 + 1, orig_size[1] // 2 * 2 + 1))
-    else:
-        img = misc.imresize(img, (loader.img_size[0], loader.img_size[1]))
 
     img = img[:, :, ::-1]
-    #img = img.astype(np.uint8)
-    #lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-    #lab_planes = cv2.split(lab)
-    #clahe = cv2.createCLAHE(clipLimit=3.0,tileGridSize=(8,8))
-    #lab_planes[0] = clahe.apply(lab_planes[0])
-    #lab = cv2.merge(lab_planes)
-    #img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    #bn_img = img[:,:,2]*0.299 + img[:,:,1]*0.587 + img[:,:,0]*0.114
-    #med = bn_img.astype(np.uint8)
-    #clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    #cl1 = clahe.apply(med)
-    #img = cl1[:,:,np.newaxis]
-
-    #img -= loader.mean
-    #if args.img_norm:
     img = img.astype(float) / 255.0
 
     # NHWC -> NCHW
     img = img.transpose(2, 0, 1)
-    #img = np.expand_dims(img, 0)
-    #img = np.concatenate((img,img,img),axis=0)
     img = np.expand_dims(img, 0)
 
     img = torch.from_numpy(img).float()
-    #img = np.concatenate((img,img,img),axis=0)
     # Setup Model
     model = get_model(model_name, n_classes, version=args.dataset)
     state = convert_state_dict(torch.load(args.model_path)["model_state"])
@@ -100,83 +73,32 @@ def test(args):
     images = img.to(device)
     outputs = model(images)
     print(np.unique(outputs.data.cpu().numpy()))
-    if args.dcrf:
-        unary = outputs.data.cpu().numpy()
-	#unary = unary - np.amin(unary)+1
-	#unary = sigmoid(unary)
-        print(np.amax(unary))
-        print(np.amin(unary))
-	#unary = unary/(np.amax(unary))
-        print(unary.shape)
-        unary = np.squeeze(unary, 0)
-        unary = -np.log(unary)
-        unary = unary.transpose(2, 1, 0)
-        w, h, c = unary.shape
-        unary = unary.transpose(2, 0, 1).reshape(loader.n_classes, -1)
-        unary = np.ascontiguousarray(unary)
 
-        resized_img = np.ascontiguousarray(resized_img)
-
-        d = dcrf.DenseCRF2D(w, h, loader.n_classes)
-        d.setUnaryEnergy(unary)
-        d.addPairwiseBilateral(sxy=5, srgb=3, rgbim=resized_img, compat=1)
-
-        q = d.inference(5)
-        #print(q.unique)
-        mask = np.argmax(q, axis=0).reshape(w, h).transpose(1, 0)
-        print(np.unique(mask))
-        decoded_crf = loader.decode_segmap(np.array(mask, dtype=np.uint8))
-        dcrf_path = args.out_path[:-4] + "_drf.png"
-        misc.imsave(dcrf_path, decoded_crf)
-        print("Dense CRF Processed Mask Saved at: {}".format(dcrf_path))
-
-    pred = np.squeeze(outputs.data.max(1)[1].cpu().numpy(), axis=0)
-    if model_name in ["pspnet", "icnet", "icnetBN"]:
-        pred = pred.astype(np.float32)
-        # float32 with F mode, resize back to orig_size
-        pred = misc.imresize(pred, orig_size, "nearest", mode="F")
-    #print(output.data.cpu().numpy().shape)
-    decoded = loader.decode_segmap(pred)
-    print("Classes found: ", np.unique(pred))
+    
     prob = outputs.data.cpu().numpy()[0,1,:,:]
-    #prob = prob - np.amin(prob)
-    #prob = prob/(np.amax(prob))
     print(np.unique(prob*255))
     misc.imsave(args.out_path[:-4] + "_prob.png",(prob*255).astype(np.uint8))
 
     prob = outputs.data.cpu().numpy()[0,6,:,:]
-    #prob = prob - np.amin(prob)
-    #prob = prob/(np.amax(prob))
     print(np.unique(prob*255))
     misc.imsave(args.out_path[:-4] + "_prob5.png",(prob*255).astype(np.uint8))
 
     prob = outputs.data.cpu().numpy()[0,2,:,:]
-    #prob = prob - np.amin(prob)
-    #prob = prob/(np.amax(prob))
     print(np.unique(prob*255))
     misc.imsave(args.out_path[:-4] + "_prob1.png",(prob*255).astype(np.uint8))
 
     prob = outputs.data.cpu().numpy()[0,3,:,:]
-    #prob = prob - np.amin(prob)
-    #prob = prob/(np.amax(prob))
     print(np.unique(prob*255))
     misc.imsave(args.out_path[:-4] + "_prob2.png",(prob*255).astype(np.uint8))
 
     prob = outputs.data.cpu().numpy()[0,4,:,:]
-    #prob = prob - np.amin(prob)
-    #prob = prob/(np.amax(prob))
     print(np.unique(prob*255))
     misc.imsave(args.out_path[:-4] + "_prob3.png",(prob*255).astype(np.uint8))
 
     prob = outputs.data.cpu().numpy()[0,5,:,:]
-    #prob = prob - np.amin(prob)
-    #prob = prob/(np.amax(prob))
     print(np.unique(prob*255))
     misc.imsave(args.out_path[:-4] + "_prob4.png",(prob*255).astype(np.uint8))
 
-
-
-    misc.imsave(args.out_path, decoded)
     print("Segmentation Mask Saved at: {}".format(args.out_path))
 
 
@@ -187,49 +109,16 @@ if __name__ == "__main__":
         "--model_path",
         nargs="?",
         type=str,
-        default="fcn8s_pascal_1_26.pkl",
+        default="model.pkl",
         help="Path to the saved model",
     )
     parser.add_argument(
         "--dataset",
         nargs="?",
         type=str,
-        default="pascal",
-        help="Dataset to use ['pascal, camvid, ade20k etc']",
+        default="drive",
+        help="Dataset to use",
     )
-
-    parser.add_argument(
-        "--img_norm",
-        dest="img_norm",
-        action="store_true",
-        help="Enable input image scales normalization [0, 1] \
-                              | True by default",
-    )
-    parser.add_argument(
-        "--no-img_norm",
-        dest="img_norm",
-        action="store_false",
-        help="Disable input image scales normalization [0, 1] |\
-                              True by default",
-    )
-    parser.set_defaults(img_norm=True)
-
-    parser.add_argument(
-        "--dcrf",
-        dest="dcrf",
-        action="store_true",
-        help="Enable DenseCRF based post-processing | \
-                              False by default",
-    )
-    parser.add_argument(
-        "--no-dcrf",
-        dest="dcrf",
-        action="store_false",
-        help="Disable DenseCRF based post-processing | \
-                              False by default",
-    )
-    parser.set_defaults(dcrf=False)
-
     parser.add_argument(
         "--img_path", nargs="?", type=str, default=None, help="Path of the input image"
     )
